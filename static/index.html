@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>npm清理</title>
+    <link rel="stylesheet" href="./element-plus.css" />
+
+
+    <style>
+        .row {
+            display: flex;
+        }
+
+        .col {
+            flex: 1;
+        }
+
+        #app {
+            max-width: 900px;
+            margin: auto;
+        }
+
+        .box-card {
+            margin: 10px 0;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .scan_item {
+            padding: 5px 10px;
+        }
+
+        .scan_item:hover {
+            background-color: #cccccc;
+        }
+
+        .scan_item_close {
+            cursor: pointer;
+        }
+
+        .break {
+            word-break: break-all;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <div class="row">
+
+            <el-select v-model="disk" placeholder="选择磁盘" clearable style=" width: 100px;">
+                <el-option v-for="item in options" :key="item.value" :label="item.label" :value="item.value" />
+            </el-select>
+            <div class="col" style="margin:0 10px;">
+                <el-input v-model="dir" placeholder="扫描路径" />
+            </div>
+
+
+            <el-button type="primary" @click="scan" style="width: 100px;">开始扫描</el-button>
+        </div>
+
+        <div class="row">
+
+            <el-card class="col box-card">
+                <template #header>
+                    <div class="card-header">
+                        <span>扫的目录</span>
+                        <el-button type="danger" @click="sendDeleteDir">删除目录</el-button>
+                    </div>
+
+                </template>
+                <el-scrollbar height="400px">
+                    <div v-for="(item,index) of scanDir" class="scan_item row">
+                        <div style="min-width: 60px;text-align: right;">
+                            {{index+1}}、
+                        </div>
+                        <div class="col break">
+                            {{item}}
+                        </div>
+
+
+                        <el-tooltip class="box-item" effect="dark" content="已删除" placement="left-start"
+                            v-if="checkDeleteStatus(item)">
+                            <el-icon :size="22" color="green" class="scan_item_close">
+                                <Check />
+                            </el-icon>
+                        </el-tooltip>
+
+                        <el-tooltip class="box-item" effect="dark" content="排除目录" placement="left-start"
+                            v-if="!checkDeleteStatus(item)">
+                            <el-icon :size="22" color="red" class="scan_item_close" @click="delete_scan_item(index)">
+                                <Delete />
+                            </el-icon>
+                        </el-tooltip>
+
+                    </div>
+                </el-scrollbar>
+            </el-card>
+        </div>
+
+
+
+
+
+        <!-- <button @click="serverSendWs">让后端主动发送给我</button>
+        <button @click="close">断开</button> -->
+    </div>
+    <script src="./vue.global.js"></script>
+    <script src="./element-plus@2.2.16.js"></script>
+    <script src="./icons-vue.js"></script>
+
+
+    <script src="./axios.min.js"></script>
+    <script>
+        const { createApp } = Vue;
+
+
+        var app = createApp({
+            data() {
+                return {
+                    whiteDirList: [],
+                    searchDirList: [],
+
+                    scanDir: [],
+                    deleteDir: [],
+
+                    ws: null,
+
+                    disk: "",
+                    dir: "",
+                    options: [
+                        {
+                            value: 'C:\\',
+                            label: 'C:\\',
+                        }, {
+                            value: 'D:\\',
+                            label: 'D:\\',
+                        }, {
+                            value: 'E:\\',
+                            label: 'E:\\',
+                        }, {
+                            value: 'F:\\',
+                            label: 'F:\\',
+                        }, {
+                            value: 'H:\\',
+                            label: 'H:\\',
+                        }, {
+                            value: 'I:\\',
+                            label: 'I:\\',
+                        }
+                    ]
+                };
+            },
+            methods: {
+                checkDeleteStatus(dir) {
+                    return !!this.deleteDir.find(item => {
+                        return item == dir
+                    })
+                },
+                delete_scan_item(index) {
+                    this.scanDir.splice(index, 1)
+                },
+                init() {
+                    fetch("http://127.0.0.1:1090/init").then(res => {
+                        console.log("res", res);
+                        return res.json()
+                    }).then(res => {
+                        console.log("res2", res);
+                        if (res.code == 1) {
+                            this.whiteDirList = res.data.WhiteDirList;
+                            this.searchDirList = res.data.SearchDirList;
+                        }
+
+                    });
+                },
+                scan() {
+                    axios("http://127.0.0.1:1090/scan", {
+                        method: "GET",
+                        data: {},
+                        params: {
+                            dir: this.disk + this.dir
+                        }
+
+                    }).then(res => {
+                        console.log("scan", res);
+                    });
+                },
+                sendDeleteDir() {
+                    axios("http://127.0.0.1:1090/deleteDir", {
+                        method: "POST",
+                        // mode: 'cors',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        data: {
+                            dir: this.scanDir
+                        }
+
+                    }).then(res => {
+                        console.log("scan", res);
+                    });
+                },
+                // sendWs(info) {
+                //     this.ws.send(JSON.stringify(info));
+                // },
+                serverSendWs() {
+                    fetch("http://127.0.0.1:1090/send");
+                },
+                close() {
+                    this.ws.close();
+                },
+            },
+            mounted() {
+                this.init()
+                this.ws = new WebSocket("ws://127.0.0.1:1090/ws");
+                this.ws.onopen = () => {
+                    console.log("open");
+                };
+                this.ws.onmessage = (e) => {
+                    console.log("onmessage", e.data);
+                    try {
+                        let data = JSON.parse(e.data)
+                        if (data.type == 'ScanDirs') {
+                            this.scanDir.push(data.data)
+                        } else if (data.type == 'DeleteDir') {
+                            this.deleteDir.push(data.data)
+                        }
+                    } catch (error) {
+                        console.log(error);
+                        alert(e.data)
+                    }
+
+                };
+
+                this.ws.onclose = () => {
+                    console.log("websocket连接已关闭...");
+                };
+            },
+        })
+        for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
+            app.component(key, component)
+        }
+
+        app.use(ElementPlus).mount("#app");
+    </script>
+</body>
+
+</html>
