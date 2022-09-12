@@ -80,7 +80,7 @@ func main() {
 	// }
 
 	router.Static("/static", "./static") //静态文件
-	fmt.Println("地址： http://127.0.0.1" + config.PORT)
+	fmt.Println("请打开地址： http://127.0.0.1" + config.PORT + "/static")
 
 	// util.GenRsaKey(2048)
 	router.Run(config.PORT)

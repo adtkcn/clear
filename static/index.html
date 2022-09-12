@@ -5,7 +5,7 @@
     <meta charset="UTF-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>npm清理</title>
+    <title>npm clear</title>
     <link rel="stylesheet" href="./element-plus.css" />
 
 
@@ -71,7 +71,7 @@
             <el-card class="col box-card">
                 <template #header>
                     <div class="card-header">
-                        <span>扫的目录</span>
+                        <span>扫出的目录</span>
                         <el-button type="danger" @click="sendDeleteDir">删除目录</el-button>
                     </div>
 
@@ -178,7 +178,9 @@
                             this.searchDirList = res.data.SearchDirList;
                         }
 
-                    });
+                    }).catch(err => {
+                        this.$message.success("请求失败")
+                    });;
                 },
                 scan() {
                     axios("http://127.0.0.1:1090/scan", {
@@ -187,29 +189,29 @@
                         params: {
                             dir: this.disk + this.dir
                         }
-
                     }).then(res => {
+                        this.$message.success(res.data.msg)
                         console.log("scan", res);
+                    }).catch(err => {
+                        this.$message.success("请求失败")
                     });
                 },
                 sendDeleteDir() {
                     axios("http://127.0.0.1:1090/deleteDir", {
                         method: "POST",
-                        // mode: 'cors',
                         headers: {
                             'Content-Type': 'application/json'
                         },
                         data: {
                             dir: this.scanDir
                         }
-
                     }).then(res => {
+                        this.$message.success(res.data.msg)
                         console.log("scan", res);
-                    });
+                    }).catch(err => {
+                        this.$message.success("请求失败")
+                    });;
                 },
-                // sendWs(info) {
-                //     this.ws.send(JSON.stringify(info));
-                // },
                 serverSendWs() {
                     fetch("http://127.0.0.1:1090/send");
                 },
@@ -241,6 +243,7 @@
 
                 this.ws.onclose = () => {
                     console.log("websocket连接已关闭...");
+                    alert("websocket连接已关闭...")
                 };
             },
         })
