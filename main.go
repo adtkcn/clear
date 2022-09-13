@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"os/exec"
+	"runtime"
 
 	"clear/config"
 	"clear/controller"
@@ -80,9 +82,16 @@ func main() {
 	// }
 
 	router.Static("/static", "./static") //静态文件
-	fmt.Println("请打开地址： http://127.0.0.1" + config.PORT + "/static")
 
-	// util.GenRsaKey(2048)
+	urlAddr := "http://127.0.0.1" + config.PORT + "/static"
+	fmt.Println("请打开地址：", urlAddr)
+	if runtime.GOOS == "windows" {
+		exec.Command(`cmd`, `/c`, `start`, urlAddr).Start()
+	} else if runtime.GOOS == "linux" {
+		exec.Command(`xdg-open`, `https://www.jianshu.com`).Start()
+	} else if runtime.GOOS == "darwin" {
+		exec.Command(`open`, urlAddr).Start()
+	}
 	router.Run(config.PORT)
 
 }
