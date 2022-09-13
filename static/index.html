@@ -179,7 +179,7 @@
                         }
 
                     }).catch(err => {
-                        this.$message.success("请求失败")
+                        this.$message.error("请求失败")
                     });;
                 },
                 scan() {
@@ -193,7 +193,7 @@
                         this.$message.success(res.data.msg)
                         console.log("scan", res);
                     }).catch(err => {
-                        this.$message.success("请求失败")
+                        this.$message.error("请求失败")
                     });
                 },
                 sendDeleteDir() {
@@ -209,7 +209,7 @@
                         this.$message.success(res.data.msg)
                         console.log("scan", res);
                     }).catch(err => {
-                        this.$message.success("请求失败")
+                        this.$message.error("请求失败")
                     });;
                 },
                 serverSendWs() {
@@ -236,14 +236,14 @@
                         }
                     } catch (error) {
                         console.log(error);
-                        alert(e.data)
+                        this.$message.error(e.data)
                     }
 
                 };
 
                 this.ws.onclose = () => {
                     console.log("websocket连接已关闭...");
-                    alert("websocket连接已关闭...")
+                    this.$message.error("websocket连接已关闭...")
                 };
             },
         })
