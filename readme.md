@@ -1,5 +1,6 @@
 # 使用方式
 ### 1、直接下载打包文件
+提供了window、linux、苹果三个amd64架构的版本，但只有windows经过测试
 https://github.com/adtkcn/clear/releases
 
 ### 2、源码打包方式
