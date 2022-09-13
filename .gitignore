@@ -30,3 +30,4 @@ __debug_bin.exe
 go.sum
 clear.zip
 bin/
+config.json

@@ -104,6 +104,9 @@
                 </el-scrollbar>
             </el-card>
         </div>
+        <div>
+            提示：删除前请检查一下，有些软件也会存在node_modules目录，以避免软件崩溃
+        </div>
 
 
 
@@ -125,9 +128,6 @@
         var app = createApp({
             data() {
                 return {
-                    whiteDirList: [],
-                    searchDirList: [],
-
                     scanDir: [],
                     deleteDir: [],
 
@@ -149,11 +149,20 @@
                             value: 'F:\\',
                             label: 'F:\\',
                         }, {
+                            value: 'G:\\',
+                            label: 'G:\\',
+                        }, {
                             value: 'H:\\',
                             label: 'H:\\',
                         }, {
                             value: 'I:\\',
                             label: 'I:\\',
+                        }, {
+                            value: 'J:\\',
+                            label: 'J:\\',
+                        }, {
+                            value: 'K:\\',
+                            label: 'K:\\',
                         }
                     ]
                 };
@@ -167,21 +176,7 @@
                 delete_scan_item(index) {
                     this.scanDir.splice(index, 1)
                 },
-                init() {
-                    fetch("http://127.0.0.1:1090/init").then(res => {
-                        console.log("res", res);
-                        return res.json()
-                    }).then(res => {
-                        console.log("res2", res);
-                        if (res.code == 1) {
-                            this.whiteDirList = res.data.WhiteDirList;
-                            this.searchDirList = res.data.SearchDirList;
-                        }
 
-                    }).catch(err => {
-                        this.$message.error("请求失败")
-                    });;
-                },
                 scan() {
                     if (!(this.disk + this.dir)) {
                         return this.$message.error("请输入路径或者选择磁盘")
@@ -226,7 +221,7 @@
                 },
             },
             mounted() {
-                this.init()
+
                 this.ws = new WebSocket("ws://127.0.0.1:1090/ws");
                 this.ws.onopen = () => {
                     console.log("open");

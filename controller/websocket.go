@@ -62,7 +62,7 @@ func DeleteClient(uid int32) {
 			clientWsGroup = append(clientWsGroup[:i], clientWsGroup[(i+1):]...)
 		}
 	}
-	log.Printf("用uid删除 %v,%v", clientWsGroup, uid)
+	log.Printf("用uid: %v删除,剩余用户%v", uid, clientWsGroup)
 }
 
 func BatchSendWs(typeStr string, msg string) {

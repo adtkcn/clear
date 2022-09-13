@@ -1,24 +1,19 @@
 package controller
 
 import (
+	"clear/config"
 	"fmt"
 	"log"
 	"os"
 	"strings"
 )
 
-var WhiteDirList = []string{`C:\\ProgramData`, `C:\\Windows`, `C:\\Program Files`, `Microsoft`, `.vscode\extensions`, `HBuilderX`, `vendor`, `微信web开发者工具`, `\resources\app`, `支付宝小程序开发工具`}
-
-var SearchDirList = []string{`\node_modules`, `Yarn\Cache`, `\AppData\Local\Microsoft\TypeScript`}
-
 func isWhite(dirName string) bool {
 	flag := false
-	for _, v := range WhiteDirList {
+	for _, v := range config.WhiteDirList {
 		//判断字符串dirName中是否包含个子串v。包含或者v为空则返回true
 
 		if strings.Contains(strings.ToLower(dirName), strings.ToLower(v)) {
-			// fmt.Println(strings.ToLower(dirName), strings.ToLower(v))
-			// fmt.Println(strings.Contains(strings.ToLower(dirName), strings.ToLower(v)))
 			flag = true
 			return true
 		}
@@ -27,7 +22,7 @@ func isWhite(dirName string) bool {
 }
 func isDel(dirName string) bool {
 	flag := false
-	for _, v := range SearchDirList {
+	for _, v := range config.SearchDirList {
 		if strings.Contains(strings.ToLower(dirName), strings.ToLower(v)) {
 			flag = true
 			return true

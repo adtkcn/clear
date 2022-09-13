@@ -4,6 +4,8 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
+	"os/exec"
+	"runtime"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
@@ -87,4 +89,16 @@ func Find(arr []string, val string) bool {
 	}
 	fmt.Println("fileExt", flag)
 	return flag
+}
+
+// 打开浏览器
+func OpenBrowser(urlAddr string) {
+	fmt.Println("请打开地址：", urlAddr)
+	if runtime.GOOS == "windows" {
+		exec.Command(`cmd`, `/c`, `start`, urlAddr).Start()
+	} else if runtime.GOOS == "linux" {
+		exec.Command(`xdg-open`, urlAddr).Start()
+	} else if runtime.GOOS == "darwin" {
+		exec.Command(`open`, urlAddr).Start()
+	}
 }
