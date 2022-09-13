@@ -183,6 +183,10 @@
                     });;
                 },
                 scan() {
+                    if (!(this.disk + this.dir)) {
+                        return this.$message.error("请输入路径或者选择磁盘")
+                    }
+                    this.$message.success("已发送扫描指令：" + this.disk + this.dir)
                     axios("http://127.0.0.1:1090/scan", {
                         method: "GET",
                         data: {},
@@ -197,6 +201,8 @@
                     });
                 },
                 sendDeleteDir() {
+                    this.$message.success("已发送删除指令")
+
                     axios("http://127.0.0.1:1090/deleteDir", {
                         method: "POST",
                         headers: {
