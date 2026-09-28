@@ -1,16 +1,28 @@
-# go-clear
+# x-clear
 
-由 [clear](../clear)（gin + websocket + 浏览器页面）迁移而来的 Wails v3 桌面应用，用于扫描并清理磁盘上的 `node_modules`、`Yarn\Cache`、`.pnpm-store` 等目录。
+一款 Windows 磁盘清理桌面工具，用于扫描并清理开发机上占空间的大头目录：`node_modules`、`Yarn\Cache`、`.pnpm-store` 等。
 
-## 迁移对照
+前端工具链装完依赖后动辄几百 MB、上千个碎文件，手动逐个盘找、逐个删非常费时。x-clear 会并发遍历指定磁盘或目录，把命中且确认属于开发项目的目录列成清单，勾选后批量删除；同时通过一系列规则避免误删已安装软件（IDE、Electron 应用等）自带的 `node_modules`。
 
-| 原 clear | go-clear (Wails v3) |
+## 功能特性
+
+- **动态磁盘枚举**：自动列出当前可读的盘符（Windows 下通过 `GetLogicalDrives` 获取，光驱等不可读盘自动跳过），也可直接输入任意路径作为扫描起点。
+- **并发扫描**：多 worker 共享任务队列遍历目录树，命中一个目录就实时推送到前端列表，慢目录不会阻塞整体进度。
+- **软件目录保护**：识别应用安装包体、Chromium/CEF 运行时文件、IDE 布局等特征，跳过软件自带的 `node_modules`（详见下文过滤规则）。
+- **卡顿治理**：跳过盘根系统目录（`Recovery`、`Windows`、`System Volume Information` 等），权限错误不刷屏，递归深度封顶，只处理真实目录而非链接/压缩包。
+- **批量删除**：列表中勾选后批量删除，每个目录删除结果单独回报；删除端会再做一次白名单与项目证据校验。
+- **可配置规则**：通过同级 `config.json` 自定义排除目录与待扫描目录名称。
+- **自适应界面**：窗口宽高任意缩放，面板整宽填满、列表内部滚动，窄窗口下工具栏自动折行。
+
+## 技术栈
+
+| 层 | 技术 |
 | --- | --- |
-| gin HTTP `/scan`、`/deleteDir` 接口 | `ClearService.StartScan`、`ClearService.DeleteDirs` 方法绑定 |
-| websocket `/ws` 推送扫描/删除进度 | `scanEvent` 应用事件（`ScanEvent{type, data}`） |
-| 浏览器打开静态页面（element-plus） | 内嵌 Vue 3 + TypeScript 窗口 UI |
-| 硬编码 C:\~K:\ 磁盘列表 | `ClearService.GetDisks` 动态枚举可用磁盘 |
-| `util`（jwt/RSA 等未使用代码） | 未迁移（死代码） |
+| 桌面应用框架 | [Wails v3](https://v3.wails.io)（beta），Go 后端 + 内嵌 WebView 桌面壳，前端产物通过 Go `embed` 打包进单一可执行文件 |
+| 后端 | Go 1.25，`goroutine` + 共享任务队列实现并发遍历，`syscall` 调用 Win32 API 枚举磁盘 |
+| 前端 | Vue 3 + TypeScript + Vite，UI 直接手写组件，不依赖组件库 |
+| 前后端通信 | Wails 服务方法绑定（`ClearService`）+ 应用事件 `scanEvent`（`ScanEvent{type, data}`）推送扫描/删除进度 |
+| 构建 | Wails Taskfile（`wails3 dev` / `wails3 build`），`vue-tsc` 做类型检查 |
 
 ## 使用方式
 
@@ -75,43 +87,21 @@ go test ./...
 
 ## 扫描性能与卡顿处理
 
-针对“扫到 `F:\Recovery` 一类的目录会卡住”的修复：
+- **并发遍历**：扫描由 8 个 worker（`scanWorkers`）共享任务队列。单 goroutine 深度优先时，一个读得很慢或读不动的目录会让结果列表原地停止；现在慢目录只占住一个 worker，其他目录的结果继续流入列表。
+- **盘根系统目录直接跳过**：`Recovery`、`Windows`、`Windows.old`、`Boot`、`EFI`、`Config.Msi`、`System Volume Information`、`$Recycle.Bin`、`$WinREAgent`、`WindowsApps`、`ProgramData`、`Documents and Settings`、`PerfLogs`、`$Extend` 共 15 个目录名。仅当扫描起点是盘根（如 `F:\`）时按**目录名全等**生效，因此 `D:\projects\boot`、`...\my-recovery-page` 这类项目目录不受影响。非系统盘上的旧安装（WinSxS 数万条目、`Installer\$PatchCache$` 逐个失败）是遍历卡顿的主因。
+- **权限错误不刷屏**：`fs.ErrPermission` 归为“无权限读取，跳过”，只记日志、不再向前端发事件；其余 IO 错误仍发 `ScanError`。
+- **递归深度上限 64**（`maxScanDepth`）：Windows 存在自引用联接（`ProgramData\Application Data` 指回 `ProgramData`），没有限制会无限下降。
+- **只处理真实目录**：`node_modules.7z`、`node_modules.zip` 等同名文件不再被列为可删；指向其他盘的链接/junction 形式的 `node_modules` 也不列入（删除只会移除链接本身、不释放空间却弄坏项目），需要到目标盘单独扫描。
+- **规则切片读写加锁**：`config.WhiteList()` / `config.SearchList()` 受 `RWMutex` 保护，避免并发扫描与 `ReadConfig` 重写切片之间的数据竞争。
 
-- **并发遍历**：扫描改为 8 个 worker 共享任务队列（`scanWorkers`）。以前是单 goroutine 深度优先，
-  一个读得很慢或一个读不动的目录就会让整个结果列表原地停止；现在慢目录只占住一个 worker，
-  其他目录的结果继续流入列表。
-- **盘根系统目录直接跳过**：`Recovery`、`Windows`、`Windows.old`、`Boot`、`EFI`、`Config.Msi`、
-  `System Volume Information`、`$Recycle.Bin`、`$WinREAgent`、`WindowsApps`、`ProgramData`、
-  `Documents and Settings`、`PerfLogs`、`$Extend` 共 15 个目录名。
-  仅当扫描起点是盘根（`F:\`）时按**目录名全等**生效，因此 `D:\projects\boot`、
-  `...\my-recovery-page` 这类项目目录不受影响。以前白名单只写了 `C:\Windows`，
-  导致非系统盘上的旧安装（WinSxS 数万条目、`Installer\$PatchCache$` 逐个失败）会被整棵遍历，
-  这是卡顿的主因。
-- **权限错误不刷屏**：`fs.ErrPermission` 归为“无权限读取，跳过”，只记日志、不再向前端发事件；
-  其余 IO 错误仍发 `ScanError`。
-- **递归深度上限 64**（`maxScanDepth`）：Windows 存在自引用联接（`ProgramData\Application Data`
-  指回 `ProgramData`），没有限制会无限下降。
-- **只处理真实目录**：`node_modules.7z`、`node_modules.zip` 等同名文件不再被列为可删；
-  指向其他盘的链接/junction 形式的 `node_modules` 也不列入（删除只会移除链接本身、
-  不释放空间却弄坏项目），需要到目标盘单独扫描。
-- **规则切片读写加锁**：`config.WhiteList()` / `config.SearchList()` 受 `RWMutex` 保护，
-  避免并发扫描与 `ReadConfig` 重写切片之间的数据竞争。
+实测（扫 `F:\` 全盘，多个历史项目盘）：完成耗时 7~9s，命中 43 个可删目录，`F:\Recovery`、`F:\Windows` 不再被读取，无错误日志洪水。
 
-实测（扫 `F:\` 全盘，多个历史项目盘）：完成耗时 7~9s，命中 43 个可删目录，
-`F:\Recovery`、`F:\Windows` 不再被读取，无错误日志洪水。
+## 界面说明
 
-## 界面
-
-- 无背景图：已去除模板的 `.bg` 图层与图片引用，底色为纯色 `--ink` 加一层 CSS 渐变光晕。
-- 宽高自适应：面板整宽填满窗口，内边距、字号、行高统一用 `clamp()` 随窗口缩放；
-  结果列表（`.card` / `.list`）占据窗口剩余高度并在内部滚动，`body` 固定为 `100dvh`
-  所以列表不会把页面撑高出现窗口滚动条。实测 460×380 / 1000×618 / 1600×900
-  三档均无横纵溢出，列表可视行数约 3 / 11 / 19 行。
-- 窄窗口（≤560px）：工具栏换为两行（路径输入框独占一行，磁盘下拉与扫描按钮同行），
-  并隐藏列表序号列。
-- 窗口尺寸：初始 1000×618，新增 `MinWidth: 420` / `MinHeight: 360` 下限。
-- `frontend/public/` 下的 `bg-desktop.jpg`、`bg-mobile.jpg`、`Inter-Medium.ttf`、`vue.svg`
-  已无任何引用，但仍会被复制进 `dist` 并嵌入二进制（约 670KB），可直接删除瘦身。
+- 纯色底 + CSS 渐变光晕，无背景图，二进制体积更小。
+- 内边距、字号、行高统一用 `clamp()` 随窗口缩放；结果列表占据窗口剩余高度并在内部滚动，`body` 固定 `100dvh`，列表再长也不会出现窗口滚动条。实测 460×380 / 1000×618 / 1600×900 三档均无横纵溢出。
+- 窄窗口（≤560px）：工具栏换为两行（路径输入框独占一行，磁盘下拉与扫描按钮同行），并隐藏列表序号列。
+- 窗口初始 1000×618（按黄金比例），下限 `MinWidth: 420` / `MinHeight: 360`。
 
 ## 安全说明
 
