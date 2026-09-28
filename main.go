@@ -1,70 +1,82 @@
 package main
 
 import (
-	"fmt"
+	"embed"
 
-	"clear/config"
-	"clear/controller"
-	"clear/util"
+	"log"
 
-	"github.com/gin-gonic/gin"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-type Dir struct {
-	Dir []string `json:"dir"`
+// Wails uses Go's `embed` package to embed the frontend files into the binary.
+// Any files in the frontend/dist folder will be embedded into the binary and
+// made available to the frontend.
+// See https://pkg.go.dev/embed for more information.
+
+//go:embed all:frontend/dist
+var assets embed.FS
+
+func init() {
+	// Register a custom event whose associated data type is ScanEvent.
+	// This is not required, but the binding generator will pick up registered events
+	// and provide a strongly typed JS/TS API for them.
+	application.RegisterEvent[ScanEvent]("scanEvent")
 }
 
+// main function serves as the application's entry point. It initializes the application, creates a window,
+// and starts a goroutine that emits a time-based event every second. It subsequently runs the application and
+// logs any error that might occur.
 func main() {
-	router := gin.Default()
 
-	router.GET("/ws", controller.GinWebsocketHandler(controller.WsServer))
-
-	router.GET("/scan", func(c *gin.Context) {
-		dir := c.Query("dir")
-
-		fmt.Println("scan dir", dir)
-		config.ReadConfig()
-		go controller.ScanDirs(dir)
-
-		c.JSON(200, gin.H{
-			"code": 1,
-			"msg":  "执行中",
-			"data": "",
-		})
+	// Create a new Wails application by providing the necessary options.
+	// Variables 'Name' and 'Description' are for application metadata.
+	// 'Assets' configures the asset server with the 'FS' variable pointing to the frontend files.
+	// 'Bind' is a list of Go struct instances. The frontend has access to the methods of these instances.
+	// 'Mac' options tailor the application when running an macOS.
+	app := application.New(application.Options{
+		Name:        "go-clear",
+		Description: "node_modules 目录清理工具",
+		Services: []application.Service{
+			application.NewService(&ClearService{}),
+		},
+		Assets: application.AssetOptions{
+			Handler: application.AssetFileServerFS(assets),
+		},
+		Mac: application.MacOptions{
+			ApplicationShouldTerminateAfterLastWindowClosed: true,
+		},
 	})
 
-	router.POST("/deleteDir", func(c *gin.Context) {
-		var dirs Dir
-		err := c.ShouldBindJSON(&dirs)
-		if err != nil {
-			c.JSON(200, gin.H{
-				"code": 0,
-				"msg":  "执行失败，参数有误",
-				"data": "",
-			})
-			return
-		}
+	// 注入应用实例，供 ClearService 向前端推送扫描/删除事件
+	wailsApp = app
 
-		fmt.Printf("%#v", dirs)
-		for _, dir := range dirs.Dir {
-			go func(dir string) {
-				controller.DeleteDir(dir)
-			}(dir)
-		}
-
-		c.JSON(200, gin.H{
-			"code": 1,
-			"msg":  "执行中",
-			"data": "",
-		})
+	// Create a new window with the necessary options.
+	// 'Title' is the title of the window.
+	// 'Mac' options tailor the window when running on macOS.
+	// 'BackgroundColour' is the background colour of the window.
+	// 'URL' is the URL that will be loaded into the webview.
+	app.Window.NewWithOptions(application.WebviewWindowOptions{
+		Title: "x-clear",
+		// 初始尺寸按黄金比例（1000 / 618 ≈ 1.618）；布局为流式，
+		// 拉大窗口则列表随之变宽变高，下限尺寸保证控件不挤压
+		Width:     1000,
+		Height:    618,
+		MinWidth:  420,
+		MinHeight: 360,
+		Mac: application.MacWindow{
+			InvisibleTitleBarHeight: 50,
+			Backdrop:                application.MacBackdropTranslucent,
+			TitleBar:                application.MacTitleBarHiddenInset,
+		},
+		BackgroundColour: application.NewRGB(6, 7, 15),
+		URL:              "/",
 	})
 
-	router.GET("/send", controller.SendWs)
+	// Run the application. This blocks until the application has been exited.
+	err := app.Run()
 
-	router.Static("/static", "./static") //静态文件
-
-	urlAddr := "http://127.0.0.1" + config.PORT + "/static"
-	util.OpenBrowser(urlAddr)
-	router.Run(config.PORT)
-
+	// If an error occurred while running the application, log it and exit.
+	if err != nil {
+		log.Fatal(err)
+	}
 }
